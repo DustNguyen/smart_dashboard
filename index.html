@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>Libraries in Washington</title>
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+    <link href="https://fonts.googleapis.com/css?family=Titillium+Web|Oswald" rel="stylesheet">
+    <link href="https://api.mapbox.com/mapbox-gl-js/v2.8.1/mapbox-gl.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="css/c3.min.css">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Titillium Web', serif;
+        }
+
+        #map {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 100%;
+        }
+
+        #info {
+            z-index: 1000;
+            position: absolute;
+            width: 500px;
+            top: 1%;
+            bottom: 1%;
+            left: .5%;
+            padding: 40px 15px 900px 15px;
+            background: #343a40;
+            color: white;
+
+        }
+
+
+        /* social media icons */
+        #info a {
+            color: lightgray;
+        }
+
+        #info a:hover {
+            color: white;
+            opacity: 0.3;
+        }
+
+
+        #title {
+            font-size: 25px;
+            font-family: 'Oswald', sans-serif;
+        }
+
+        /* social media icons */
+        #title span {
+            font-size: 14px;
+            float: right;
+            margin-right: 10px;
+        }
+
+
+        #desc {
+            text-align: center;
+            color: lightgray;
+            font-size: medium;
+            font-weight: bold;
+            margin-bottom: 0px;
+        }
+
+        #library-count {
+            margin: 0;
+            text-align: center;
+            color: orange;
+            font-size: 50px;
+        }
+
+        #earthquake-chart {
+            top: 20px;
+        }
+
+
+        #footer {
+            position: absolute;
+            bottom: 0px;
+            margin-bottom: 20px;
+            margin-right: 10px;
+            font-size: 13px;
+            line-height: 150%;
+            color: lightgray;
+        }
+
+        /* the layout of the legend panel */
+        .legend {
+            background-color: #fff;
+            padding: 10px;
+            border-radius: 5px;
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+        }
+
+        .legend-item {
+            margin-bottom: 5px;
+            display: flex;
+            align-items: center;
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            margin-right: 10px;
+            border-radius: 50%;
+            border: 1px solid #000;
+        }
+
+        /* each line for a break */
+        .break {
+            position: relative;
+            margin: 0px;
+            padding: 0px;
+        }
+
+        /* basic style for a dot/circle */
+        .dot {
+            display: inline-block;
+            margin-top: 5px;
+            border-radius: 50%;
+            opacity: 0.6;
+        }
+
+        /* the label for the dot */
+        .dot-label {
+            position: absolute;
+            top: 0;
+            right: 0;
+            font-style: italic;
+        }
+    </style>
+    <script src="https://api.mapbox.com/mapbox-gl-js/v2.8.1/mapbox-gl.js"></script>
+    <script src="js/d3.js"></script>
+    <script src="js/c3.min.js"></script>
+</head>
+
+<body>
+    <div id="info">
+        <div id="title">
+            Libraries in Washington State
+            <span><a href="https://twitter.com/UW" target="_blank"><i class="bi bi-twitter"></i></a></span>
+            <span><a href="https://github.com/DustNguyen" target="_blank"><i class="bi bi-github"></i></a></span>
+            <span id="reset"><a href="#">reset</a></span>
+        </div>
+        <div id="count" class="card">
+            <h5 id="desc"> # Libraries in the displaying region</h5>
+            <p id="earthquake-count"></p>
+        </div>
+        <div id="earthquake-chart"></div>
+
+        <div id="footer">
+            This is a map of all libraries in the Washington State.
+        </div>
+    </div>
+    <div id="map"></div>
+    <div class="legend">
+        <div class="legend-item">
+            <div class="legend-color" style="background-color: #5733FF;"></div>
+            Academic Libraries
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background-color: #33FF57;"></div>
+            Government Libraries
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background-color: #800080;"></div>
+            Public Libraries
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background-color: #FFFFFF;"></div>
+            Special Libraries
+        </div>
+    </div>
+
+    <script>
+        // assign the access token
+        mapboxgl.accessToken =
+            'pk.eyJ1IjoiZHVzdC1uZ3V5ZW4iLCJhIjoiY2xvb3R3Y3F2MDMyaDJqbnFsd2U4eGxlMyJ9.-GyFe5LsmQVWZ9O6XkdSpg';
+
+        // declare the map object
+        let map = new mapboxgl.Map({
+            container: 'map', // container ID
+            style: 'mapbox://styles/mapbox/dark-v10',
+            zoom: 6.89, // starting zoom
+            minZoom: 5,
+            center: [-122.391, 47.339] // starting center
+        });
+
+        // declare the coordinated chart as well as other variables.
+        let libraryChart = null,
+            magnitude = {},
+            numLibraries = 0;
+
+        // create a few constant variables.
+        const libraryTypes = ['Academic Libraries', 'Government Libraries', 'Public Libraries'],
+            colors = ['#FF5733', '#33FF57', '#5733FF'];
+
+        // define the asynchronous function to load geojson data.
+        async function geojsonFetch() {
+
+            // Await operator is used to wait for a promise. 
+            // An await can cause an async function to pause until a Promise is settled.
+            let response;
+            response = await fetch('assets/Statewide_Libraries_121550394811448020.geojson');
+            libraries = await response.json();
+
+
+
+            //load data to the map as new layers.
+            //map.on('load', function loadingData() {
+            map.on('load', () => { //simplifying the function statement: arrow with brackets to define a function
+
+                // when loading a geojson, there are two steps
+                // add a source of the data and then add the layer out of the source
+                map.addSource('libraries', {
+                    type: 'geojson',
+                    data: libraries
+                });
+
+
+                map.addLayer({
+                    'id': 'libraries-point',
+                    'type': 'circle',
+                    'source': 'libraries',
+                    'paint': {
+                        'circle-radius': 6,
+                        'circle-color': [
+                            'match',
+                            ['get', 'LDTC_TypeDescription'],
+                            'Academic Libraries', '#5733FF',
+                            'Government Libraries', '#33FF57',
+                            'Public Libraries', '#800080',
+                            'Special Libraries', '#FFFFFF',
+                            '#CCCCCC'
+                        ], 
+
+    }
+});
+
+
+                // click on each dot to view magnitude in a popup
+                map.on('click', 'libraries-point', (event) => {
+                    new mapboxgl.Popup()
+                        .setLngLat(event.features[0].geometry.coordinates)
+                        .setHTML(`${event.features[0].properties.Library}`)
+                        .addTo(map);
+                });
+
+                const libraryTypesCount = calculateLibraryTypesCount(libraries);
+
+                // Update the content of the HTML element with the count of libraries
+                document.getElementById("library-count").innerHTML = libraries.length;
+
+                // generate the chart
+                libraryChart = c3.generate({
+                    size: {
+                        height: 350,
+                        width: 460
+                    },
+                        data: {
+                            x: 'LDTC_TypeDescription',
+                            columns: [
+                                ['LDTC_TypeDescription', 'Academic Libraries', 'Government Libraries', 'Public Libraries', 'Special Libraries'],
+                                ['Count', countAcademicLibraries, countGovernmentLibraries, countPublicLibraries, countSpecialLibraries]
+                            ],
+                            type: 'bar', // make a bar chart.
+                            colors: {
+                                'Academic Libraries': '#FF5733',
+                                'Government Libraries': '#33FF57',
+                                'Public Libraries': '#5733FF',
+                                'Special Libraries': '#CCCCCC',
+                            },
+                            onclick: function (d) {
+                                // Additional code if needed when a bar is clicked
+                                // Example: Update the map and sidebar based on the clicked library type
+                                let clickedLibraryType = d.id;
+                                // Add your logic here to update the map or perform other actions based on the clicked library type
+                            }
+                        },
+                        axis: {
+                            x: {
+                                type: 'category'
+                            },
+                            y: {
+                                tick: {
+                                    values: [10, 20, 30, 40, 50, 60, 70, 80, 90]
+                                }
+                            }
+                        },
+                        legend: {
+                            show: false
+                        },
+                        bindto: "#earthquake-chart" // bind the chart to the placeholder element "library-chart".
+                    });
+
+            });
+
+
+        }
+
+        // call the geojson loading function
+        geojsonFetch();
+
+        function calEarthquakes(currentEarthquakes, currentMapBounds) {
+
+            let magnitudesClasses = {
+                4: 0,
+                5: 0,
+                6: 0
+            };
+            currentEarthquakes.features.forEach(function (d) { // d indicate a feature of currentEarthquakes
+                // contains is a spatial operation to determine whether a point within a bbox or not.
+                if (currentMapBounds.contains(d.geometry.coordinates)) {
+                    // if within, the # of the earthquake in the same magnitude increase by 1.
+                    magnitudesClasses[Math.floor(d.properties.mag)] += 1;
+                }
+
+            })
+            return magnitudesClasses;
+        }
+
+        // capture the element reset and add a click event to it.
+        const reset = document.getElementById('reset');
+        reset.addEventListener('click', event => {
+
+            // this event will trigger the map fly to its origin location and zoom level.
+            map.flyTo({
+                zoom: 6.89,
+                center: [-122.391, 47.339]
+            });
+            // also remove all the applied filters
+            map.setFilter('earthquakes-point', null)
+
+
+        });
+    </script>
+</body>
+
+</html>
