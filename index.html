@@ -76,7 +76,7 @@
             font-size: 50px;
         }
 
-        #earthquake-chart {
+        #library-chart {
             top: 20px;
         }
 
@@ -155,12 +155,14 @@
         </div>
         <div id="count" class="card">
             <h5 id="desc"> # Libraries in the displaying region</h5>
-            <p id="earthquake-count"></p>
+            <p id="library-count"></p>
         </div>
-        <div id="earthquake-chart"></div>
+        <div id="library-chart"></div>
 
         <div id="footer">
-            This is a map of all libraries in the Washington State.
+            This is a map of all libraries in the Washington State. The data comes from the Washington Geospatial Open Data Portal.
+
+
         </div>
     </div>
     <div id="map"></div>
@@ -249,7 +251,7 @@
 });
 
 
-                // click on each dot to view magnitude in a popup
+                // click on each dot to view title of library
                 map.on('click', 'libraries-point', (event) => {
                     new mapboxgl.Popup()
                         .setLngLat(event.features[0].geometry.coordinates)
@@ -257,10 +259,17 @@
                         .addTo(map);
                 });
 
-                const libraryTypesCount = calculateLibraryTypesCount(libraries);
+                const numberOfLibraries = libraries.features.length;
 
                 // Update the content of the HTML element with the count of libraries
-                document.getElementById("library-count").innerHTML = libraries.length;
+                document.getElementById("library-count").innerHTML = numberOfLibraries;
+
+                const libraryTypes = ['Academic Libraries', 'Government Libraries', 'Public Libraries', 'Special Libraries'];
+                const libraryCounts = calLibraries(libraries, libraryTypes);
+
+                // Extract data for the chart
+                const x = ['LDTC_TypeDescription'].concat(libraryTypes);
+                const y = ['Count'].concat(Object.values(libraryCounts));
 
                 // generate the chart
                 libraryChart = c3.generate({
@@ -268,41 +277,40 @@
                         height: 350,
                         width: 460
                     },
-                        data: {
-                            x: 'LDTC_TypeDescription',
-                            columns: [
-                                ['LDTC_TypeDescription', 'Academic Libraries', 'Government Libraries', 'Public Libraries', 'Special Libraries'],
-                                ['Count', countAcademicLibraries, countGovernmentLibraries, countPublicLibraries, countSpecialLibraries]
-                            ],
-                            type: 'bar', // make a bar chart.
-                            colors: {
-                                'Academic Libraries': '#FF5733',
-                                'Government Libraries': '#33FF57',
-                                'Public Libraries': '#5733FF',
-                                'Special Libraries': '#CCCCCC',
-                            },
-                            onclick: function (d) {
-                                // Additional code if needed when a bar is clicked
-                                // Example: Update the map and sidebar based on the clicked library type
-                                let clickedLibraryType = d.id;
-                                // Add your logic here to update the map or perform other actions based on the clicked library type
+                    data: {
+                        x: 'LDTC_TypeDescription',
+                        columns: [x, y],
+                        type: 'bar', // make a bar chart.
+                        colors: {
+                            'Academic Libraries': '#FF5733',
+                            'Government Libraries': '#33FF57',
+                            'Public Libraries': '#5733FF',
+                            'Special Libraries': '#CCCCCC',
+                        },
+                        onclick: function (d) {
+                            // Additional code if needed when a bar is clicked
+                            // Example: Update the map and sidebar based on the clicked library type
+                            let clickedLibraryType = d.id;
+                            // Add your logic here to update the map or perform other actions based on the clicked library type
+                            map.setFilter('libraries-point', ['==', 'LDTC_TypeDescription', clickedLibraryType]);
+
+                        }
+                    },
+                    axis: {
+                        x: {
+                            type: 'category'
+                        },
+                        y: {
+                            tick: {
+                                values: [50, 100, 150, 200, 250, 300, 350]
                             }
-                        },
-                        axis: {
-                            x: {
-                                type: 'category'
-                            },
-                            y: {
-                                tick: {
-                                    values: [10, 20, 30, 40, 50, 60, 70, 80, 90]
-                                }
-                            }
-                        },
-                        legend: {
-                            show: false
-                        },
-                        bindto: "#earthquake-chart" // bind the chart to the placeholder element "library-chart".
-                    });
+                        }
+                    },
+                    legend: {
+                        show: false
+                    },
+                    bindto: "#library-chart" // bind the chart to the placeholder element "library-chart".
+                });
 
             });
 
@@ -312,23 +320,30 @@
         // call the geojson loading function
         geojsonFetch();
 
-        function calEarthquakes(currentEarthquakes, currentMapBounds) {
+        function calLibraries(libraryData, libraryTypes) {
+            // Initialize an object to store the counts for each library type
+            let libraryTypeCounts = {};
 
-            let magnitudesClasses = {
-                4: 0,
-                5: 0,
-                6: 0
-            };
-            currentEarthquakes.features.forEach(function (d) { // d indicate a feature of currentEarthquakes
-                // contains is a spatial operation to determine whether a point within a bbox or not.
-                if (currentMapBounds.contains(d.geometry.coordinates)) {
-                    // if within, the # of the earthquake in the same magnitude increase by 1.
-                    magnitudesClasses[Math.floor(d.properties.mag)] += 1;
+            // Initialize counts for each library type to zero
+            libraryTypes.forEach(type => {
+                libraryTypeCounts[type] = 0;
+            });
+
+            // Loop through each library feature in the provided data
+            libraryData.features.forEach(function (library) {
+                // Extract the library type from the feature's properties
+                const libraryType = library.properties.LDTC_TypeDescription;
+
+                // Check if the library type is in the specified types
+                if (libraryTypes.includes(libraryType)) {
+                    // If it is, increment the count for the corresponding library type
+                    libraryTypeCounts[libraryType] += 1;
                 }
+            });
 
-            })
-            return magnitudesClasses;
-        }
+    // Return the object containing the counts for each library type
+    return libraryTypeCounts;
+}
 
         // capture the element reset and add a click event to it.
         const reset = document.getElementById('reset');
